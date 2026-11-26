@@ -1,0 +1,13 @@
+{
+  "tal": "/etc/fort/tal-lab",
+  "local-repository": "/var/local/fort",
+  "slurm": "/etc/fort/slurm.json",
+  "mode": "server",
+  "http": { "enabled": false },
+  "server": {
+    "address": ["0.0.0.0"],
+    "port": "3323",
+    "interval": { "validation": 60, "refresh": 30, "retry": 10, "expire": 7200 }
+  },
+  "log": { "level": "info", "output": "console" }
+}

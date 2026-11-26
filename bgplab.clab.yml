@@ -1,0 +1,114 @@
+# Laboratorio "BGP es Simple" - containerlab + FRR + FORT
+# Despliegue:  ./lab.sh up      (o: sudo containerlab deploy -t bgplab.clab.yml)
+name: bgplab
+prefix: bgp            # los contenedores se llaman bgp-<nodo>: bgp-as10, bgp-a-b1, ...
+
+mgmt:
+  network: bgplab-mgmt
+  ipv4-subnet: 172.31.255.0/24
+
+topology:
+  nodes:
+    # ---------------- AS20 "EmpresaA": dos bordes y un route reflector ----------------
+    a-b1: &frr          # plantilla comun a todos los routers FRR
+      kind: linux
+      image: quay.io/frrouting/frr:10.7.1
+      # Antes de arrancar FRR se quita la ruta por defecto de la red de gestion:
+      # asi el ruteo lo decide solo BGP (la red de gestion sigue alcanzable)
+      entrypoint: /bin/sh
+      cmd: -c "ip route del default 2>/dev/null; exec /sbin/tini -- /usr/lib/frr/docker-start"
+      binds:
+        - configs/__clabNodeName__/frr.conf:/etc/frr/frr.conf
+        - configs/__clabNodeName__/daemons:/etc/frr/daemons
+        - configs/vtysh.conf:/etc/frr/vtysh.conf
+      sysctls:
+        net.ipv4.ip_forward: 1
+        net.ipv6.conf.all.forwarding: 1
+        net.ipv4.conf.all.rp_filter: 0
+        net.ipv4.conf.default.rp_filter: 0
+    a-rr: *frr
+    a-b2: *frr
+    # ---------------- Proveedores de transito ----------------
+    as10: *frr        # ISP-A (no valida RPKI ni filtra bien a sus clientes)
+    as30: *frr        # ISP-B (valida RPKI, large communities, vecinos dinamicos)
+    as40: *frr        # "Internet": transito de AS10 y AS30
+    as41: *frr        # Red remota, enlace IPv6 sin numerar (RFC 8950)
+    # ---------------- IXP AS100 ----------------
+    rs: *frr          # Route server
+    as50: *frr        # Red de contenido: transito por AS40 y peering en el IXP
+    ixp-sw:           # Switch del IXP: un bridge Linux dentro de un contenedor
+      kind: linux
+      image: quay.io/frrouting/frr:10.7.1
+      entrypoint: /bin/sh
+      cmd: -c "sleep infinity"
+      exec:
+        - ip link add ixp type bridge
+        - ip link set ixp up
+        - ip link set eth1 master ixp
+        - ip link set eth2 master ixp
+        - ip link set eth3 master ixp
+        - ip link set eth4 master ixp
+    # ---------------- Clientes de los ISP ----------------
+    as60: *frr        # Cliente multihomed de AS10 y AS30 (escenario de route leak)
+    as66: *frr        # Cliente de AS10 que secuestra un prefijo (escenario de hijack)
+    # ---------------- RPKI: repositorio local + validador FORT ----------------
+    rpki-repo:
+      kind: linux
+      image: nicmx/fort-validator:1.6.7
+      mgmt-ipv4: 172.31.255.251
+      entrypoint: rsync
+      cmd: --daemon --no-detach --config=/etc/rsyncd.conf
+      binds:
+        - rpki/repo:/repo:ro
+        - rpki/rsyncd.conf:/etc/rsyncd.conf:ro
+    fort:
+      kind: linux
+      image: nicmx/fort-validator:1.6.7
+      mgmt-ipv4: 172.31.255.250
+      cmd: --configuration-file /etc/fort/fort.json
+      restart-policy: on-failure
+      binds:
+        - fort/fort.json:/etc/fort/fort.json:ro
+        - fort/slurm.json:/etc/fort/slurm.json:ro
+        - rpki/bgplab.tal:/etc/fort/tal-lab/bgplab.tal:ro
+      stages:
+        create:
+          wait-for:
+            - node: rpki-repo
+              stage: create
+    # ---------------- Controlador de mitigacion (origina FlowSpec) ----------------
+    mitig:
+      kind: linux
+      image: ghcr.io/exa-networks/exabgp:latest
+      cmd: /etc/exabgp/exabgp.conf
+      env:
+        exabgp_daemon_user: root
+        exabgp_api_cli: "false"
+      binds:
+        - configs/mitig/exabgp.conf:/etc/exabgp/exabgp.conf:ro
+      exec:
+        - ip addr add 20.0.3.22/30 dev eth1
+
+  links:
+    # AS20 hacia sus proveedores
+    - endpoints: ["a-b1:eth1", "as10:eth1"]    # 10.0.1.0/30  2001:db8:0:1::/64
+    - endpoints: ["a-b2:eth1", "as30:eth1"]    # 10.0.2.0/30  2001:db8:0:2::/64
+    # Proveedores hacia "Internet"
+    - endpoints: ["as10:eth2", "as40:eth1"]    # 10.0.3.0/30  2001:db8:0:3::/64
+    - endpoints: ["as30:eth2", "as40:eth2"]    # 10.0.4.0/30  2001:db8:0:4::/64
+    - endpoints: ["as40:eth3", "as41:eth1"]    # solo IPv6 link-local
+    - endpoints: ["as50:eth2", "as40:eth4"]    # 10.0.5.0/30  2001:db8:0:5::/64
+    # Clientes de los ISP
+    - endpoints: ["as60:eth1", "as10:eth3"]    # 10.0.6.0/30
+    - endpoints: ["as60:eth2", "as30:eth3"]    # 10.0.7.0/30
+    - endpoints: ["as66:eth1", "as10:eth4"]    # 10.0.8.0/30
+    # LAN del IXP: 192.168.0.0/24  2001:db8:100::/64
+    - endpoints: ["rs:eth1",   "ixp-sw:eth1"]
+    - endpoints: ["a-b2:eth2", "ixp-sw:eth2"]
+    - endpoints: ["as30:eth4", "ixp-sw:eth3"]
+    - endpoints: ["as50:eth1", "ixp-sw:eth4"]
+    # Red interna de AS20 (OSPF + iBGP)
+    - endpoints: ["a-rr:eth1", "a-b1:eth2"]    # 20.0.3.8/30
+    - endpoints: ["a-rr:eth2", "a-b2:eth3"]    # 20.0.3.12/30
+    - endpoints: ["a-b1:eth3", "a-b2:eth4"]    # 20.0.3.16/30
+    - endpoints: ["a-b1:eth4", "mitig:eth1"]   # 20.0.3.20/30

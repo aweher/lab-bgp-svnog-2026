@@ -1,0 +1,23 @@
+{
+  "slurmVersion": 1,
+  "validationOutputFilters": {
+    "prefixFilters": [],
+    "bgpsecFilters": []
+  },
+  "locallyAddedAssertions": {
+    "prefixAssertions": [
+      { "asn": 10, "prefix": "110.0.0.0/16",      "maxPrefixLength": 16, "comment": "ISP-A" },
+      { "asn": 10, "prefix": "2001:db8:10::/48",  "maxPrefixLength": 48, "comment": "ISP-A" },
+      { "asn": 20, "prefix": "20.0.0.0/21",       "maxPrefixLength": 22, "comment": "EmpresaA: /21 y sus dos /22" },
+      { "asn": 20, "prefix": "2001:db8:20::/48",  "maxPrefixLength": 48, "comment": "EmpresaA" },
+      { "asn": 30, "prefix": "30.0.0.0/16",       "maxPrefixLength": 16, "comment": "ISP-B" },
+      { "asn": 30, "prefix": "2001:db8:30::/48",  "maxPrefixLength": 48, "comment": "ISP-B" },
+      { "asn": 40, "prefix": "40.0.0.0/16",       "maxPrefixLength": 16, "comment": "Internet" },
+      { "asn": 40, "prefix": "2001:db8:40::/48",  "maxPrefixLength": 48, "comment": "Internet" },
+      { "asn": 50, "prefix": "50.0.0.0/16",       "maxPrefixLength": 16, "comment": "Contenido" },
+      { "asn": 50, "prefix": "2001:db8:50::/48",  "maxPrefixLength": 48, "comment": "Contenido" },
+      { "asn": 60, "prefix": "60.0.0.0/16",       "maxPrefixLength": 16, "comment": "Cliente multihomed" }
+    ],
+    "bgpsecAssertions": []
+  }
+}
