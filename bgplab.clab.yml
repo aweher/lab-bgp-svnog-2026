@@ -1,7 +1,11 @@
 # Laboratorio "BGP es Simple" - containerlab + FRR + FORT
 # Despliegue:  ./lab.sh up      (o: sudo containerlab deploy -t bgplab.clab.yml)
-name: bgplab
-prefix: bgp            # los contenedores se llaman bgp-<nodo>: bgp-as10, bgp-a-b1, ...
+# containerlab nombra los contenedores <prefix>-<name>-<nodo>. Con el valor
+# magico __lab-name se omite el prefijo y queda <name>-<nodo>: bgp-as10,
+# bgp-a-b1, ... que es lo que esperan lab.sh, verificar.py y el README.
+# (Con "name: bgplab" + "prefix: bgp" quedaban bgp-bgplab-<nodo> y nada los encontraba.)
+name: bgp
+prefix: __lab-name
 
 mgmt:
   network: bgplab-mgmt

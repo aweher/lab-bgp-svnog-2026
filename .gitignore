@@ -1,8 +1,8 @@
 # ------------------------------------------------------------------
 # containerlab: certificados y estado que genera al desplegar
-# (clab-bgplab/ con la CA para SSH hacia los nodos)
+# (clab-bgp/ con la CA para SSH hacia los nodos)
 # ------------------------------------------------------------------
-clab-bgplab/
+clab-bgp/
 clab-*/
 
 # ------------------------------------------------------------------
